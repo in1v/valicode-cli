@@ -2,16 +2,30 @@
 
 Valicode audits code changes for security, reliability, and production readiness before they ship.
 
-This repository contains the public CLI source distributed on PyPI as `valicode`.
+This repository contains the public CLI source distributed on PyPI and npm as `valicode`.
 The hosted API, dashboard, billing, admin tools, and infrastructure are not part of this repository.
 
 ## Install
+
+Python / pip:
 
 ```bash
 python -m pip install valicode
 ```
 
-Requires Python 3.10 or newer.
+Node / npm:
+
+```bash
+npm install -g valicode
+```
+
+One-off npm usage:
+
+```bash
+npx valicode scan . --output summary
+```
+
+Requires Python 3.10 or newer. The npm package is a lightweight wrapper that creates an isolated Python environment and runs the same Valicode CLI engine published on PyPI.
 
 ## Authenticate
 
@@ -101,4 +115,5 @@ valicode analyze --staged --no-context
 - Website: https://valicode.sbs
 - Docs: https://valicode.sbs/docs
 - PyPI: https://pypi.org/project/valicode/
+- npm: https://www.npmjs.com/package/valicode
 - Security reports: see [SECURITY.md](SECURITY.md)
