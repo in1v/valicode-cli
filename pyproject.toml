@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "valicode"
-version = "2.0.0"
+version = "2.0.1"
 description = "Valicode CLI"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,3 +37,6 @@ Documentation = "https://valicode.sbs/docs"
 [project.scripts]
 aov = "aov.cli:cli"
 valicode = "aov.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["aov*"]

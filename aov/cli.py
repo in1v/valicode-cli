@@ -69,7 +69,7 @@ def get_api_base() -> str:
 
 
 @click.group()
-@click.version_option("2.0.0", prog_name="valicode")
+@click.version_option("2.0.1", prog_name="valicode")
 def cli():
     """Valicode - audit AI-generated code before it ships."""
 
@@ -152,7 +152,7 @@ def analyze(path, diff_file, staged, pr, repo, output, save_report, fail_under, 
         result = response.json()
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 401:
-            click.echo("Authentication failed. Check your API key.", err=True)
+            click.echo("Authentication failed. Run valicode login and paste a valid key from Dashboard > API keys.", err=True)
         elif exc.response.status_code == 429:
             click.echo("Rate limit exceeded. Wait before retrying.", err=True)
         else:
@@ -248,7 +248,10 @@ def scan(path, production, repo, output, save_report, fail_under, max_upload_mb,
         response.raise_for_status()
         result = response.json()
     except httpx.HTTPStatusError as exc:
-        click.echo(f"API error {exc.response.status_code}", err=True)
+        if exc.response.status_code == 401:
+            click.echo("Authentication failed. Run valicode login and paste a valid key from Dashboard > API keys.", err=True)
+        else:
+            click.echo(f"API error {exc.response.status_code}: {_response_error_message(exc.response)}", err=True)
         sys.exit(1)
     except httpx.TimeoutException:
         click.echo("Workspace scan timed out.", err=True)
@@ -1179,6 +1182,8 @@ def api_request(method: str, path: str, *, json_body: dict | None = None, params
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         message = _response_error_message(exc.response)
+        if exc.response.status_code == 401:
+            message = f"{message}. Run valicode login and paste a valid key from Dashboard > API keys."
         click.echo(f"API error {exc.response.status_code}: {message}", err=True)
         sys.exit(1)
     except httpx.HTTPError as exc:
@@ -1203,6 +1208,24 @@ def _response_error_message(response: httpx.Response) -> str:
         return str(data.get("message") or data.get("detail") or data.get("error") or data)
     except ValueError:
         return response.text[:500]
+
+
+def validate_api_key(api_key: str) -> tuple[bool, str]:
+    try:
+        response = httpx.get(
+            f"{get_api_base()}/account/me",
+            headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+            timeout=20,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            email = data.get("email") or data.get("user", {}).get("email") or "account"
+            return True, f"Authenticated as {email}."
+        if response.status_code == 401:
+            return False, "Invalid API key. Create a key in Dashboard > API keys, copy the full value, and run valicode login again."
+        return False, f"API rejected the key with status {response.status_code}: {_response_error_message(response)}"
+    except httpx.HTTPError as exc:
+        return False, f"Could not validate API key: {exc}"
 
 
 def print_payload(data, *, json_output: bool = False) -> None:
@@ -1272,11 +1295,18 @@ def _format_cell(value) -> str:
 @cli.command()
 def login():
     """Authenticate with your Valicode account."""
-    api_key = click.prompt("Paste your API key", hide_input=True)
+    api_key = click.prompt("Paste your API key", hide_input=True).strip()
+    if not api_key:
+        click.echo("No API key entered.", err=True)
+        sys.exit(1)
+    ok, message = validate_api_key(api_key)
+    if not ok:
+        click.echo(message, err=True)
+        sys.exit(1)
     cfg = load_config()
-    cfg["api_key"] = api_key.strip()
+    cfg["api_key"] = api_key
     save_config(cfg)
-    click.echo("API key saved.")
+    click.echo(f"API key saved. {message}")
 
 
 @cli.group()
@@ -1566,7 +1596,7 @@ def account_preferences(weekly_digest: bool, critical_alerts: bool, json_output:
     print_payload(api_request("PATCH", "account/preferences", json_body=payload), json_output=json_output)
 
 
-@cli.group("admin")
+@cli.group("admin", hidden=os.environ.get("VALICODE_SHOW_ADMIN") != "1")
 def admin_group():
     """Admin controls for users, beta access, billing, rules, and system health."""
 
